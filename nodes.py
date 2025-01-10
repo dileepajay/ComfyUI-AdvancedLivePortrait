@@ -356,7 +356,10 @@ class LP_Engine:
         face_img = rgb_crop(img_rgb, face_region)
         if is_changed: face_img = self.expand_img(face_img, crop_region)
         return face_img
-
+    
+    global_var_x = 0
+    global_var_y = 0
+    
     def prepare_source(self, source_image, crop_factor, is_video = False, tracking = False):
         print("Prepare source...")
         engine = self.get_pipeline()
@@ -385,6 +388,39 @@ class LP_Engine:
             x_s_info = engine.get_kp_info(i_s)
             f_s_user = engine.extract_feature_3d(i_s)
             x_s_user = engine.transform_keypoint(x_s_info)
+            print('x_s_info')
+            print(x_s_info)
+            print('f_s_user')
+            print(f_s_user)
+            print('x_s_user')
+            print(x_s_user)
+            
+            smile=-1.30
+           # x_s_user[0, 20, 1] += smile * -0.01
+          #  x_s_user[0, 14, 1] += smile * -0.02
+           # x_s_user[0, 17, 1] += smile * 0.0065
+            #x_s_user[0, 17, 2] += smile * 0.003
+            #x_s_user[0, 13, 1] += smile * -0.00275
+            #x_s_user[0, 16, 1] += smile * -0.00275
+           # x_s_user[0, 3, 1] += smile * -0.0035
+            #x_s_user[0, 7, 1] += smile * -0.0035
+            global global_var_x, global_var_y
+            global_var_y=x_s_user[0, 19, 1]/(-0.001)
+           
+            #x_s_user[0, 19, 1] += mouth * 0.001 #chin up 120,down=-30
+            #x_s_user[0, 19, 2] += mouth * 0.0001
+            #x_s_user[0, 17, 1] += mouth * -0.0001
+            #rotate_pitch -= mouth * 0.05
+            
+            global_var_x=(x_s_user[0, 20, 1]+x_s_user[0, 20, 2])/(2*-0.001)
+             
+            #x_s_user[0, 20, 2] += eee * -0.001 #mouth ee-20>  <15
+            #x_s_user[0, 20, 1] += eee * -0.001
+            #x_d_new[0, 19, 1] += eee * 0.0006
+            #x_s_user[0, 14, 1] += eee * -0.001
+            
+            
+        
             psi = PreparedSrcImg(img_rgb, crop_trans_m, x_s_info, f_s_user, x_s_user, mask_ori)
             if is_video == False:
                 return psi
@@ -406,8 +442,23 @@ class LP_Engine:
         return out_list
 
     def calc_fe(_, x_d_new, eyes, eyebrow, wink, pupil_x, pupil_y, mouth, eee, woo, smile,
-                rotate_pitch, rotate_yaw, rotate_roll):
-
+                rotate_pitch, rotate_yaw, rotate_roll
+                ,natural_x,natural_y):
+        global global_var_x, global_var_y
+        
+        
+        if(natural_x!=0):
+            print('mouth_move_x:')
+            print(global_var_x)
+            eyes=global_var_x*natural_x
+            
+            
+        if(natural_y!=0):
+            print('mouth_move_y:')
+            print(global_var_y)
+            eyebrow=(global_var_y/-20) *natural_y
+      
+        
         x_d_new[0, 20, 1] += smile * -0.01
         x_d_new[0, 14, 1] += smile * -0.02
         x_d_new[0, 17, 1] += smile * 0.0065
@@ -437,6 +488,7 @@ class LP_Engine:
         x_d_new[0, 17, 0] += wink * 0.0003
         x_d_new[0, 17, 1] += wink * 0.0003
         x_d_new[0, 3, 1] += wink * -0.0003
+        
         rotate_roll -= wink * 0.1
         rotate_yaw -= wink * 0.1
 
@@ -468,8 +520,11 @@ class LP_Engine:
             x_d_new[0, 1, 1] += eyebrow * 0.0003
             x_d_new[0, 2, 1] += eyebrow * -0.0003
 
-
+        print('x_d_new')
+        print(x_d_new)
+        
         return torch.Tensor([rotate_pitch, rotate_yaw, rotate_roll])
+    
 g_engine = LP_Engine()
 
 class ExpressionSet:
@@ -856,6 +911,7 @@ class ExpressionEditor:
                 "eee": ("FLOAT", {"default": 0, "min": -20, "max": 15, "step": 0.2, "display": display}),
                 "woo": ("FLOAT", {"default": 0, "min": -20, "max": 15, "step": 0.2, "display": display}),
                 "smile": ("FLOAT", {"default": 0, "min": -0.3, "max": 1.3, "step": 0.01, "display": display}),
+               
 
                 "src_ratio": ("FLOAT", {"default": 1, "min": 0, "max": 1, "step": 0.01, "display": display}),
                 "sample_ratio": ("FLOAT", {"default": 1, "min": -0.2, "max": 1.2, "step": 0.01, "display": display}),
@@ -882,6 +938,7 @@ class ExpressionEditor:
     # OUTPUT_IS_LIST = (False,)
 
     def run(self, rotate_pitch, rotate_yaw, rotate_roll, blink, eyebrow, wink, pupil_x, pupil_y, aaa, eee, woo, smile,
+            
             src_ratio, sample_ratio, sample_parts, crop_factor, src_image=None, sample_image=None, motion_link=None, add_exp=None):
         rotate_yaw = -rotate_yaw
 
@@ -933,7 +990,7 @@ class ExpressionEditor:
                 retargeting(es.e, self.d_info['exp'], sample_ratio, (1, 2, 11, 13, 15, 16))
 
         es.r = g_engine.calc_fe(es.e, blink, eyebrow, wink, pupil_x, pupil_y, aaa, eee, woo, smile,
-                                  rotate_pitch, rotate_yaw, rotate_roll)
+                                  rotate_pitch, rotate_yaw, rotate_roll,0,0)
 
         if add_exp != None:
             es.add(add_exp)
@@ -962,10 +1019,152 @@ class ExpressionEditor:
         new_editor_link.append(es)
 
         return {"ui": {"images": results}, "result": (out_img, new_editor_link, es)}
+    
+class ExpressionEditor_v2:
+    def __init__(self):
+        self.sample_image = None
+        self.src_image = None
+        self.crop_factor = None
+
+    @classmethod
+    def INPUT_TYPES(s):
+        display = "number"
+        #display = "slider"
+        return {
+            "required": {
+
+                "rotate_pitch": ("FLOAT", {"default": 0, "min": -20, "max": 20, "step": 0.5, "display": display}),
+                "rotate_yaw": ("FLOAT", {"default": 0, "min": -20, "max": 20, "step": 0.5, "display": display}),
+                "rotate_roll": ("FLOAT", {"default": 0, "min": -20, "max": 20, "step": 0.5, "display": display}),
+
+                "blink": ("FLOAT", {"default": 0, "min": -20, "max": 5, "step": 0.5, "display": display}),
+                "eyebrow": ("FLOAT", {"default": 0, "min": -10, "max": 15, "step": 0.5, "display": display}),
+                "wink": ("FLOAT", {"default": 0, "min": 0, "max": 25, "step": 0.5, "display": display}),
+                "pupil_x": ("FLOAT", {"default": 0, "min": -15, "max": 15, "step": 0.5, "display": display}),
+                "pupil_y": ("FLOAT", {"default": 0, "min": -15, "max": 15, "step": 0.5, "display": display}),
+                "aaa": ("FLOAT", {"default": 0, "min": -30, "max": 120, "step": 1, "display": display}),
+                "eee": ("FLOAT", {"default": 0, "min": -20, "max": 15, "step": 0.2, "display": display}),
+                "woo": ("FLOAT", {"default": 0, "min": -20, "max": 15, "step": 0.2, "display": display}),
+                "smile": ("FLOAT", {"default": 0, "min": -0.3, "max": 1.3, "step": 0.01, "display": display}),
+
+ 
+                "natural_x": ("FLOAT", {"default": 0, "min": -1, "max": 1, "step": 0.01, "display": display}),
+                "natural_y": ("FLOAT", {"default": 0, "min": -1, "max": 1, "step": 0.01, "display": display}),
+
+                "src_ratio": ("FLOAT", {"default": 1, "min": 0, "max": 1, "step": 0.01, "display": display}),
+                "sample_ratio": ("FLOAT", {"default": 1, "min": -0.2, "max": 1.2, "step": 0.01, "display": display}),
+                "sample_parts": (["OnlyExpression", "OnlyRotation", "OnlyMouth", "OnlyEyes", "All"],),
+                "crop_factor": ("FLOAT", {"default": crop_factor_default,
+                                          "min": crop_factor_min, "max": crop_factor_max, "step": 0.1}),
+            },
+
+            "optional": {"src_image": ("IMAGE",), "motion_link": ("EDITOR_LINK",),
+                         "sample_image": ("IMAGE",), "add_exp": ("EXP_DATA",),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE", "EDITOR_LINK", "EXP_DATA")
+    RETURN_NAMES = ("image", "motion_link", "save_exp")
+
+    FUNCTION = "run"
+
+    OUTPUT_NODE = True
+
+    CATEGORY = "AdvancedLivePortrait"
+
+    # INPUT_IS_LIST = False
+    # OUTPUT_IS_LIST = (False,)
+
+    def run(self, rotate_pitch, rotate_yaw, rotate_roll, blink, eyebrow, wink, pupil_x, pupil_y, aaa, eee, woo, smile,
+            natural_x,natural_y,
+            src_ratio, sample_ratio, sample_parts, crop_factor, src_image=None, sample_image=None, motion_link=None, add_exp=None):
+        rotate_yaw = -rotate_yaw
+
+        new_editor_link = None
+        if motion_link != None:
+            self.psi = motion_link[0]
+            new_editor_link = motion_link.copy()
+        elif src_image != None:
+            if id(src_image) != id(self.src_image) or self.crop_factor != crop_factor:
+                self.crop_factor = crop_factor
+                self.psi = g_engine.prepare_source(src_image, crop_factor)
+                print('self.psi')
+                print(self.psi)
+                self.src_image = src_image
+            new_editor_link = []
+            new_editor_link.append(self.psi)
+        else:
+            return (None,None)
+
+        pipeline = g_engine.get_pipeline()
+
+        psi = self.psi
+        s_info = psi.x_s_info
+        #delta_new = copy.deepcopy()
+        s_exp = s_info['exp'] * src_ratio
+        s_exp[0, 5] = s_info['exp'][0, 5]
+        s_exp += s_info['kp']
+
+        es = ExpressionSet()
+
+        if sample_image != None:
+            if id(self.sample_image) != id(sample_image):
+                self.sample_image = sample_image
+                d_image_np = (sample_image * 255).byte().numpy()
+                d_face = g_engine.crop_face(d_image_np[0], 1.7)
+                i_d = g_engine.prepare_src_image(d_face)
+                self.d_info = pipeline.get_kp_info(i_d)
+                self.d_info['exp'][0, 5, 0] = 0
+                self.d_info['exp'][0, 5, 1] = 0
+
+            # "OnlyExpression", "OnlyRotation", "OnlyMouth", "OnlyEyes", "All"
+            if sample_parts == "OnlyExpression" or sample_parts == "All":
+                es.e += self.d_info['exp'] * sample_ratio
+            if sample_parts == "OnlyRotation" or sample_parts == "All":
+                rotate_pitch += self.d_info['pitch'] * sample_ratio
+                rotate_yaw += self.d_info['yaw'] * sample_ratio
+                rotate_roll += self.d_info['roll'] * sample_ratio
+            elif sample_parts == "OnlyMouth":
+                retargeting(es.e, self.d_info['exp'], sample_ratio, (14, 17, 19, 20))
+            elif sample_parts == "OnlyEyes":
+                retargeting(es.e, self.d_info['exp'], sample_ratio, (1, 2, 11, 13, 15, 16))
+
+        es.r = g_engine.calc_fe(es.e, blink, eyebrow, wink, pupil_x, pupil_y, aaa, eee, woo, smile,
+                                  rotate_pitch, rotate_yaw, rotate_roll,natural_x,natural_y)
+        #print(es.r)
+        if add_exp != None:
+            es.add(add_exp)
+
+        new_rotate = get_rotation_matrix(s_info['pitch'] + es.r[0], s_info['yaw'] + es.r[1],
+                                         s_info['roll'] + es.r[2])
+        x_d_new = (s_info['scale'] * (1 + es.s)) * ((s_exp + es.e) @ new_rotate) + s_info['t']
+      # print(x_d_new)
+        x_d_new = pipeline.stitching(psi.x_s_user, x_d_new)
+       # print(x_d_new)
+
+        crop_out = pipeline.warp_decode(psi.f_s_user, psi.x_s_user, x_d_new)
+        crop_out = pipeline.parse_output(crop_out['out'])[0]
+
+        crop_with_fullsize = cv2.warpAffine(crop_out, psi.crop_trans_m, get_rgb_size(psi.src_rgb), cv2.INTER_LINEAR)
+        out = np.clip(psi.mask_ori * crop_with_fullsize + (1 - psi.mask_ori) * psi.src_rgb, 0, 255).astype(np.uint8)
+
+        out_img = pil2tensor(out)
+
+        filename = g_engine.get_temp_img_name() #"fe_edit_preview.png"
+        folder_paths.get_save_image_path(filename, folder_paths.get_temp_directory())
+        img = Image.fromarray(crop_out)
+        img.save(os.path.join(folder_paths.get_temp_directory(), filename), compress_level=1)
+        results = list()
+        results.append({"filename": filename, "type": "temp"})
+
+        new_editor_link.append(es)
+
+        return {"ui": {"images": results}, "result": (out_img, new_editor_link, es)}
 
 NODE_CLASS_MAPPINGS = {
     "AdvancedLivePortrait": AdvancedLivePortrait,
     "ExpressionEditor": ExpressionEditor,
+    "ExpressionEditor_v2": ExpressionEditor_v2,
     "LoadExpData": LoadExpData,
     "SaveExpData": SaveExpData,
     "ExpData": ExpData,
@@ -975,6 +1174,7 @@ NODE_CLASS_MAPPINGS = {
 NODE_DISPLAY_NAME_MAPPINGS = {
     "AdvancedLivePortrait": "Advanced Live Portrait (PHM)",
     "ExpressionEditor": "Expression Editor (PHM)",
+    "ExpressionEditor_enhance": "Expression Editor-Enhance",
     "LoadExpData": "Load Exp Data (PHM)",
     "SaveExpData": "Save Exp Data (PHM)"
 }
